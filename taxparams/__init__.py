@@ -28,15 +28,38 @@ class TaxParams(paramtools.Parameters):
         }
         
     def adjust(self, params_or_path, **kwargs):
+        """
+        Custom adjust method that handles special indexing logic. The logic
+        is:
+
+        1. If CPI_offset is modified, update the inflation rates and the values
+            of all parameters that are set in the year after the CPI_offset 
+            parameter is changed.
+        2. If the "indexed" status is updated for any parameter:
+            a. extend the values of that parameter to the year in which 
+                the status is changed.
+            b. change the the indexed status for the parameter.
+            c. extend the values of that parameter until the highest year,
+                using the new "indexed" status.
+        3. Update all parameters that are not indexing related, i.e. they are
+            not CPI_offset or do not end with "-indexed".
+        4. Return parsed adjustment with all adjustments, including "-indexed"
+            parameters.
+        """
         min_year = min(self._stateless_label_grid["year"])
         
-        # turn off extra ops during the intermediary adjustments.
+        # turn off extra ops during the intermediary adjustments so that
+        # expensive and unnecessary operations are not changed.
         label_to_extend = self.label_to_extend
         array_first = self.array_first
         self.array_first = False
 
         params = self.read_params(params_or_path)
         
+        # Check if CPI_offset is adjusted. If so, reset values of all indexed
+        # parameters after year where CPI_offset is changed. If CPI_offset is
+        # changed multiple times, then the reset year is the year in which the
+        # CPI_offset is first changed.
         if params.get("CPI_offset") is not None:
             cpi_adj = super().adjust({"CPI_offset": params["CPI_offset"]})
             cpi_min_year = min(cpi_adj["CPI_offset"], key= lambda vo: vo["year"])
@@ -102,7 +125,11 @@ class TaxParams(paramtools.Parameters):
             if not param.endswith("-indexed")
         }
         needs_reset = reset_state - set(nonindexed_params.keys())
+        
+        # Reset values with correct array and extend instance variables.
         self._set_state(params=needs_reset)
+        
+        # Do adjustment for all non-indexing related parameters.
         adj = super().adjust(nonindexed_params)
         
         # add indexing params back for return to user.
