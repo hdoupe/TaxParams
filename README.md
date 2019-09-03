@@ -59,6 +59,32 @@ TaxParams implements all of the logic described in the previous section within t
 For the exact implementation, check out the `TaxParams.adjust` method.
 
 
+## How to use
+
+```bash
+git clone https://github.com/hdoupe/TaxParams
+cd TaxParams
+conda env create
+conda activate taxparams-dev
+cd ..
+git clone https://github.com/PSLmodels/Tax-Calculator
+cd Tax-Calculator
+git remote add hdoupe https://github.com/hdoupe/Tax-Calculator
+git fetch hdoupe taxparams
+git checkout taxparams
+pip install -e .
+cd ../TaxParams
+
+```
+
+
+# Run tests
+
+```python
+py.test taxparams/tests/test.py
+```
+
+
 ## Disclaimer
 
 The development of this package is 1% me understanding how indexing rates are related to tax policy and 99% percent me reverse-engineering Tax-Calculator. There may be (and most certainly are) errors in this package or in my description of parameter indexing.

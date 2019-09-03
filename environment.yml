@@ -3,7 +3,7 @@ channels:
 - conda-forge
 - PSLmodels
 dependencies:
-- paramtools>=0.8.0
-- taxcalc>=2.4.2
+- paramtools>=0.9.0
+- taxcalc>=2.5.0
 - numpy
 - pytest
