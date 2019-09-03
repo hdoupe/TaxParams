@@ -17,41 +17,40 @@ POLICY_SCHEMA = {
         "year": {
             "type": "int",
             "validators": {
-                "choice": {
-                    "choices": [
-                        yr for yr in range(MIN_YEAR,
-                                           MAX_YEAR + 1)
-                    ]
-                }
-            }
+                "choice": {"choices": [yr for yr in range(MIN_YEAR, MAX_YEAR + 1)]}
+            },
         },
         "MARS": {
             "type": "str",
-            "validators": {"choice": {"choices": ["single", "mjoint",
-                                                  "mseparate", "headhh",
-                                                  "widow"]}}
+            "validators": {
+                "choice": {
+                    "choices": ["single", "mjoint", "mseparate", "headhh", "widow"]
+                }
+            },
         },
         "idedtype": {
             "type": "str",
-            "validators": {"choice": {"choices": ["med", "sltx", "retx", "cas",
-                                                  "misc", "int", "char"]}}
+            "validators": {
+                "choice": {
+                    "choices": ["med", "sltx", "retx", "cas", "misc", "int", "char"]
+                }
+            },
         },
         "EIC": {
             "type": "str",
-            "validators": {"choice": {"choices": ["0kids", "1kid",
-                                                  "2kids", "3+kids"]}}
+            "validators": {"choice": {"choices": ["0kids", "1kid", "2kids", "3+kids"]}},
         },
         "data_source": {
             "type": "str",
-            "validators": {"choice": {"choices": ["PUF", "CPS", "other"]}}
-        }
+            "validators": {"choice": {"choices": ["PUF", "CPS", "other"]}},
+        },
     },
     "additional_members": {
         "section_1": {"type": "str"},
         "section_2": {"type": "str"},
         "start_year": {"type": "int"},
-        "checkbox": {"type": "bool"}
-    }
+        "checkbox": {"type": "bool"},
+    },
 }
 
 
@@ -71,12 +70,7 @@ def convert_defaults(pcl=DEFAULTS, ignore_data_source=True):
             # both are false?
             return {"data_source": "other"}
 
-    type_map = {
-        "real": "float",
-        "boolean": "bool",
-        "integer": "int",
-        "string": "str",
-    }
+    type_map = {"real": "float", "boolean": "bool", "integer": "int", "string": "str"}
 
     new_pcl = defaultdict(dict)
     new_pcl["schema"] = POLICY_SCHEMA
@@ -93,25 +87,25 @@ def convert_defaults(pcl=DEFAULTS, ignore_data_source=True):
                 # if min_year + year > LAST_YEAR:
                 #     break
                 for dim1 in range(len(pol_val[0])):
-                    values.append({
-                        "year": min_year + year,
-                        item["vi_name"]: item["vi_vals"][dim1],
-                        "value": pol_val[year][dim1],
-                        **data_source
-                    })
+                    values.append(
+                        {
+                            "year": min_year + year,
+                            item["vi_name"]: item["vi_vals"][dim1],
+                            "value": pol_val[year][dim1],
+                            **data_source,
+                        }
+                    )
         else:
             for year in range(len(pol_val)):
                 # if min_year + year > LAST_YEAR:
                 #     break
-                values.append({
-                    "year": min_year + year,
-                    "value": pol_val[year],
-                    **data_source
-                })
+                values.append(
+                    {"year": min_year + year, "value": pol_val[year], **data_source}
+                )
 
-        new_pcl[param]['value'] = values
-        new_pcl[param]['title'] = pcl[param]["long_name"]
-        new_pcl[param]['type'] = type_map[pcl[param]["value_type"]]
+        new_pcl[param]["value"] = values
+        new_pcl[param]["title"] = pcl[param]["long_name"]
+        new_pcl[param]["type"] = type_map[pcl[param]["value_type"]]
 
         new_pcl[param]["validators"] = {"range": pcl[param]["valid_values"]}
 
@@ -123,7 +117,8 @@ def convert_defaults(pcl=DEFAULTS, ignore_data_source=True):
                 new_pcl[param]["checkbox"] = False
 
         to_keep = list(POLICY_SCHEMA["additional_members"].keys()) + [
-            "description", "notes"
+            "description",
+            "notes",
         ]
         for k in to_keep:
             if k in pcl[param]:

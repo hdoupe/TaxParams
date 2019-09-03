@@ -13,17 +13,15 @@ class TaxParams(paramtools.Parameters):
     label_to_extend = "year"
     uses_extend_func = True
 
-    WAGE_INDEXED_PARAMS = (
-        "SS_Earnings_c",
-        "SS_Earnings_thd"
-    )
+    WAGE_INDEXED_PARAMS = ("SS_Earnings_c", "SS_Earnings_thd")
 
     def __init__(self, *args, **kwargs):
         self._wage_rates = None
         self._inflation_rates = None
         super().__init__(*args, **kwargs)
         self._init_values = {
-            param: data["value"] for param, data in self.read_params(self.defaults).items()
+            param: data["value"]
+            for param, data in self.read_params(self.defaults).items()
             if param != "schema"
         }
 
@@ -71,7 +69,7 @@ class TaxParams(paramtools.Parameters):
         # CPI_offset is first changed.
         if params.get("CPI_offset") is not None:
             cpi_adj = super().adjust({"CPI_offset": params["CPI_offset"]})
-            cpi_min_year = min(cpi_adj["CPI_offset"], key= lambda vo: vo["year"])
+            cpi_min_year = min(cpi_adj["CPI_offset"], key=lambda vo: vo["year"])
             self.set_rates()
             to_delete = {}
             for param in self._data:
@@ -94,14 +92,18 @@ class TaxParams(paramtools.Parameters):
                     indexed_val = values[0]["value"]
                     year = values[0].get("year", min_year)
                 else:
-                    raise Exception("Index adjustment parameter must be a boolean or list with one item.")
+                    raise Exception(
+                        "Index adjustment parameter must be a boolean or list with one item."
+                    )
                 # reset all values to default.
                 super().adjust({base_param: [{"value": None}]})
                 super().adjust({base_param: self._init_values[base_param]})
 
                 # get and delete all default values after year where indexed status changed.
                 gte = self.select_gt(base_param, True, year=year)
-                self._adjust({base_param: list([dict(vo, **{"value": None}) for vo in gte])})
+                self._adjust(
+                    {base_param: list([dict(vo, **{"value": None}) for vo in gte])}
+                )
 
                 # extend values for this parameter to the year where the indexed
                 # status changes.
@@ -109,17 +111,14 @@ class TaxParams(paramtools.Parameters):
                     self.extend(
                         params=[base_param],
                         label_to_extend="year",
-                        label_to_extend_values=list(range(min_year, year + 1))
+                        label_to_extend_values=list(range(min_year, year + 1)),
                     )
 
                 # set indexed status.
                 self._data[base_param]["indexed"] = indexed_val
 
                 # extend values remaining years.
-                self.extend(
-                    params=[base_param],
-                    label_to_extend="year",
-                )
+                self.extend(params=[base_param], label_to_extend="year")
 
                 needs_reset = needs_reset | {base_param}
 
@@ -129,7 +128,8 @@ class TaxParams(paramtools.Parameters):
 
         # filter out "-indexed" params
         nonindexed_params = {
-            param: val for param, val in params.items()
+            param: val
+            for param, val in params.items()
             if not param.endswith("-indexed")
         }
 
@@ -137,17 +137,14 @@ class TaxParams(paramtools.Parameters):
         if needs_reset:
             self._set_state(params=needs_reset)
 
-
         # Do adjustment for all non-indexing related parameters.
         adj = super().adjust(nonindexed_params)
 
         # add indexing params back for return to user.
-        adj.update({
-            param: val for param, val in params.items()
-            if param.endswith("-indexed")
-        })
+        adj.update(
+            {param: val for param, val in params.items() if param.endswith("-indexed")}
+        )
         return adj
-
 
     def get_index_rate(self, param, label_to_extend_val):
         """
@@ -166,17 +163,11 @@ class TaxParams(paramtools.Parameters):
 
     def set_rates(self):
         """Initialize taxcalc indexing data."""
-        cpi_vals = [
-            vo["value"] for vo in self._data["CPI_offset"]["value"]
-        ]
+        cpi_vals = [vo["value"] for vo in self._data["CPI_offset"]["value"]]
         # extend cpi_offset values through budget window if they
         # have not been extended already.
-        cpi_vals = cpi_vals + cpi_vals[-1:] * (
-            2029 - 2013 + 1 - len(cpi_vals)
-        )
-        cpi_offset = {
-            (2013 + ix): val for ix, val in enumerate(cpi_vals)
-        }
+        cpi_vals = cpi_vals + cpi_vals[-1:] * (2029 - 2013 + 1 - len(cpi_vals))
+        cpi_offset = {(2013 + ix): val for ix, val in enumerate(cpi_vals)}
         rates = taxcalc.GrowFactors()
         self._inflation_rates = {
             (2013 + year): np.round(rate + cpi_offset[2013 + year], 4)
