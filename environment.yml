@@ -1,0 +1,9 @@
+name: taxparams-dev
+channels:
+- conda-forge
+- PSLmodels
+dependencies:
+- paramtools>=0.8.0
+- taxcalc>=2.4.2
+- numpy
+- pytest
