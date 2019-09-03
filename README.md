@@ -1,10 +1,10 @@
 # TaxParams
 
-TaxParams shows how ParamTools can be used for a complex, real world parameter indexing problem. TaxParams is mostly compatible with the open-source Tax-Calculator project's parameter processing and validation library. Further, since most of the low-level parameter handling logic is taken care of by ParamTools, this project provides a high-level view of the logic used to index tax policy parameters to inflation. This logic is encapsulated in the `adjust` method of the `TaxParams` class.
+TaxParams shows how [ParamTools][1] can be used for a complex, real world parameter indexing problem. TaxParams is mostly compatible with the open-source [Tax-Calculator][2] project's parameter processing and validation library. Further, since most of the low-level parameter handling logic is taken care of by ParamTools, this project provides a high-level view of the logic used to index tax policy parameters to inflation. This logic is encapsulated in the `adjust` method of the `TaxParams` class.
 
 ## What is parameter indexing
 
-A parameter is indexed when its value grows over time at some rate or set of rates. For example, tax parameters like the standard deduction are often indexed to price inflation. So, the value of the standard deduction actually increases every year by 1 or 2% depending on that year's inflation rate. Lucky for us, ParamTools already implements parameter indexing.
+A parameter is indexed when its value grows over time at some rate or set of rates. For example, tax parameters like the standard deduction are often indexed to price inflation. So, the value of the standard deduction actually increases every year by 1 or 2% depending on that year's inflation rate. Lucky for us, [ParamTools already implements parameter indexing][3].
 
 ## How does Tax-Calculator do indexing
 
@@ -18,11 +18,11 @@ taxparams.adjust(
 )
 ```
 
-Third, Tax-Calculator has a `CPI_offset` parameter that is added to the traditional CPI measure to estimate a chained CPI. Finally, if the indexing status of a parameter changes or if the indexing rates change (i.e. by changing `CPI_offset`), the values of all affected parameters need to be updated, but only after the year in which the change takes effect.
+Third, Tax-Calculator has a [`CPI_offset`][4] parameter that is added to the traditional CPI measure to estimate a chained CPI. Finally, if the indexing status of a parameter changes or if the indexing rates change (i.e. by changing `CPI_offset`), the values of all affected parameters need to be updated, but only after the year in which the change takes effect.
 
 ## Implementation
 
-ParamTools allows you to write custom `adjust` methods on top of its `adjust` method by using the following syntax:
+ParamTools allows you to write custom `adjust` methods on top of its `adjust` method by using the following syntax (todo: link to custom adjust docs once published):
 
 ```python
 import paramtools
@@ -57,3 +57,9 @@ TaxParams implements all of the logic described in the previous section within t
     parameters.
 
 For the exact implementation, check out the `TaxParams.adjust` method.
+
+
+[1]: https://github.com/PSLmodels/ParamTools
+[2]: https://github.com/PSLmodels/Tax-Calculator/
+[3]: https://paramtools.org/api/indexing/
+[4]: https://github.com/PSLmodels/Tax-Calculator/blob/2.5.0/taxcalc/policy_current_law.json#L2-L29
