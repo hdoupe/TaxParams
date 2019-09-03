@@ -8,7 +8,7 @@ A parameter is indexed when its value grows over time at some rate or set of rat
 
 ## How does Tax-Calculator do indexing
 
-Before we dive into the details, let's take a 10,000 foot view of how Tax-Calculator does parameter indexing. First, not all parameters are indexed. It doesn't make sense to index some parameters. For example, how do you index a tax rate? Second, not all of the parameters that can be indexed are indexed. It's a policy decision whether the value for a tax law provision is indexed or not. A parameter's indexing status can be turned on and off by setting the value of its name plus "-indexing" to `true` or `false`. For example, the following code snippet turns on indexing for the Child Tax Credit (`CTC`):
+Before we dive into the details, let's take a 10,000 foot view of how Tax-Calculator does parameter indexing. First, not all parameters are indexed. It doesn't make sense to index some parameters. For example, how do you index a tax rate? Second, not all of the parameters that can be indexed are indexed. Whether the value for a tax law provision is indexed or not is a policy decision. A parameter's indexing status can be turned on and off by setting the value of its name plus "-indexing" to `true` or `false`. For example, the following code snippet turns on indexing for the Child Tax Credit (`CTC`):
 
 ```python
 taxparams.adjust(
@@ -57,6 +57,11 @@ TaxParams implements all of the logic described in the previous section within t
     parameters.
 
 For the exact implementation, check out the `TaxParams.adjust` method.
+
+
+## Disclaimer
+
+The development of this package is 1% me understanding how indexing rates are related to tax policy and 99% percent me reverse-engineering Tax-Calculator. There may be (and most certainly are) errors in this package or in my description of parameter indexing.
 
 
 [1]: https://github.com/PSLmodels/ParamTools
