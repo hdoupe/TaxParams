@@ -102,7 +102,7 @@ class TaxParams(paramtools.Parameters):
                     indexed_val = to_index[year]
                     # get and delete all default values after year where indexed status changed.
                     gte = self.select_gt(base_param, True, year=year)
-                    self._adjust(
+                    super().adjust(
                         {base_param: list([dict(vo, **{"value": None}) for vo in gte])}
                     )
 
@@ -124,7 +124,7 @@ class TaxParams(paramtools.Parameters):
                         vos = paramtools.select_gt(
                             params[base_param], False, {"year": year - 1}
                         )
-                        self._adjust({base_param: vos})
+                        super().adjust({base_param: vos})
 
                     # extend values remaining years.
                     self.extend(params=[base_param], label_to_extend="year")
