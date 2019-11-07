@@ -6,8 +6,9 @@ import taxcalc
 from taxparams import TaxParams
 
 
-def cmp_with_taxcalc_values(taxparams):
-    pol = taxcalc.Policy()
+def cmp_with_taxcalc_values(taxparams, pol=None):
+    if pol is None:
+        pol = taxcalc.Policy()
     # test all keys are the same.
     assert set(map(lambda x: x[1:], pol._vals.keys())) == set(taxparams._data.keys())
     # test all values are the same.
@@ -54,7 +55,7 @@ def test_simple_adj(taxparams):
             ]
         }
     )
-    np.testing.assert_allclose(pol._EITC_c, taxparams.EITC_c)
+    cmp_with_taxcalc_values(taxparams, pol)
 
 
 @pytest.mark.parametrize("year", [2014, 2016, 2018, 2022, 2025])
@@ -63,7 +64,7 @@ def test_adj_indexed_status(taxparams, year):
     pol.implement_reform({"EITC_c-indexed": {year: False}})
 
     taxparams.adjust({"EITC_c-indexed": [{"year": year, "value": False}]})
-    np.testing.assert_allclose(pol._EITC_c, taxparams.EITC_c)
+    cmp_with_taxcalc_values(taxparams, pol)
 
 
 def test_adj_indexed_status_beginning(taxparams):
@@ -71,7 +72,7 @@ def test_adj_indexed_status_beginning(taxparams):
     pol.implement_reform({"EITC_c-indexed": {2013: False}})
 
     taxparams.adjust({"EITC_c-indexed": False})
-    np.testing.assert_allclose(pol._EITC_c, taxparams.EITC_c)
+    cmp_with_taxcalc_values(taxparams, pol)
 
 
 @pytest.mark.parametrize("year", [2014, 2016, 2018, 2022, 2025])
@@ -95,7 +96,7 @@ def test_adj_indexed_status_and_param_value(taxparams, year):
             "EITC_c-indexed": [{"year": year, "value": False}],
         }
     )
-    np.testing.assert_allclose(pol._EITC_c, taxparams.EITC_c)
+    cmp_with_taxcalc_values(taxparams, pol)
 
 
 @pytest.mark.parametrize("year", [2014, 2016, 2018, 2022, 2025])
@@ -109,7 +110,7 @@ def test_adj_activates_index(taxparams, year):
             "CTC_c-indexed": [{"year": year, "value": True}],
         }
     )
-    np.testing.assert_allclose(pol._CTC_c, taxparams.CTC_c)
+    cmp_with_taxcalc_values(taxparams, pol)
 
 
 @pytest.mark.parametrize("year", [2014, 2016, 2018, 2022, 2025])
@@ -125,3 +126,69 @@ def test_adj_CPI_offset(year):
     np.testing.assert_allclose(exp_inflation, new_inflation)
 
     cmp_with_taxcalc_values(taxparams)
+
+
+def test_multiple_cpi_swaps():
+
+    pol = taxcalc.Policy()
+    pol.implement_reform(
+        {
+            "II_em": {2016: 6000, 2018: 7500, 2020: 9000},
+            "II_em-indexed": {2016: False, 2018: True},
+        }
+    )
+
+    taxparams = TaxParams()
+    taxparams.adjust(
+        {
+            "II_em": [
+                {"year": 2016, "value": 6000},
+                {"year": 2018, "value": 7500},
+                {"year": 2020, "value": 9000},
+            ],
+            "II_em-indexed": [
+                {"year": 2016, "value": False},
+                {"year": 2018, "value": True},
+            ],
+        }
+    )
+
+    cmp_with_taxcalc_values(taxparams, pol)
+
+
+def test_multiple_cpi_swaps2():
+    pol = taxcalc.Policy()
+    pol.implement_reform(
+        {
+            "II_em": {2016: 6000, 2018: 7500, 2020: 9000},
+            "II_em-indexed": {2016: False, 2018: True},
+            "SS_Earnings_c": {2016: 300000, 2018: 500000, 2020: 700000},
+            "AMT_em-indexed": {2017: False, 2020: True},
+        }
+    )
+
+    taxparams = TaxParams()
+    taxparams.adjust(
+        {
+            "SS_Earnings_c": [
+                {"year": 2016, "value": 300000},
+                {"year": 2018, "value": 500000},
+                {"year": 2020, "value": 700000},
+            ],
+            "AMT_em-indexed": [
+                {"year": 2017, "value": False},
+                {"year": 2020, "value": True},
+            ],
+            "II_em": [
+                {"year": 2016, "value": 6000},
+                {"year": 2018, "value": 7500},
+                {"year": 2020, "value": 9000},
+            ],
+            "II_em-indexed": [
+                {"year": 2016, "value": False},
+                {"year": 2018, "value": True},
+            ],
+        }
+    )
+
+    cmp_with_taxcalc_values(taxparams, pol)

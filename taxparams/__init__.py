@@ -82,43 +82,52 @@ class TaxParams(paramtools.Parameters):
         # no need to do extra work to extend parameters in the next block.
         self.label_to_extend = None
         needs_reset = set([])
+        index_affected = set([])
         for param, values in params.items():
             if param.endswith("-indexed"):
                 base_param = param.split("-indexed")[0]
+                index_affected = index_affected | {param, base_param}
+                to_index = {}
                 if isinstance(values, bool):
-                    indexed_val = values
-                    year = min_year
-                elif isinstance(values, list) and len(values) == 1:
-                    indexed_val = values[0]["value"]
-                    year = values[0].get("year", min_year)
+                    to_index[min_year] = values
+                elif isinstance(values, list):
+                    for vo in values:
+                        to_index[vo.get("year", min_year)] = vo["value"]
                 else:
                     raise Exception(
-                        "Index adjustment parameter must be a boolean or list with one item."
-                    )
-                # reset all values to default.
-                super().adjust({base_param: [{"value": None}]})
-                super().adjust({base_param: self._init_values[base_param]})
-
-                # get and delete all default values after year where indexed status changed.
-                gte = self.select_gt(base_param, True, year=year)
-                self._adjust(
-                    {base_param: list([dict(vo, **{"value": None}) for vo in gte])}
-                )
-
-                # extend values for this parameter to the year where the indexed
-                # status changes.
-                if year > min_year:
-                    self.extend(
-                        params=[base_param],
-                        label_to_extend="year",
-                        label_to_extend_values=list(range(min_year, year + 1)),
+                        "Index adjustment parameter must be a boolean or list."
                     )
 
-                # set indexed status.
-                self._data[base_param]["indexed"] = indexed_val
+                for year in sorted(to_index):
+                    indexed_val = to_index[year]
+                    # get and delete all default values after year where indexed status changed.
+                    gte = self.select_gt(base_param, True, year=year)
+                    self._adjust(
+                        {base_param: list([dict(vo, **{"value": None}) for vo in gte])}
+                    )
 
-                # extend values remaining years.
-                self.extend(params=[base_param], label_to_extend="year")
+                    # extend values for this parameter to the year where the indexed
+                    # status changes.
+                    if year > min_year:
+                        self.extend(
+                            params=[base_param],
+                            label_to_extend="year",
+                            label_to_extend_values=list(range(min_year, year + 1)),
+                        )
+
+                    # set indexed status.
+                    self._data[base_param]["indexed"] = indexed_val
+
+                    # adjust with values greater than or equal to current year
+                    # in params
+                    if base_param in params:
+                        vos = paramtools.select_gt(
+                            params[base_param], False, {"year": year - 1}
+                        )
+                        self._adjust({base_param: vos})
+
+                    # extend values remaining years.
+                    self.extend(params=[base_param], label_to_extend="year")
 
                 needs_reset = needs_reset | {base_param}
 
@@ -128,9 +137,7 @@ class TaxParams(paramtools.Parameters):
 
         # filter out "-indexed" params
         nonindexed_params = {
-            param: val
-            for param, val in params.items()
-            if not param.endswith("-indexed")
+            param: val for param, val in params.items() if param not in index_affected
         }
 
         needs_reset = needs_reset - set(nonindexed_params.keys())
@@ -142,7 +149,7 @@ class TaxParams(paramtools.Parameters):
 
         # add indexing params back for return to user.
         adj.update(
-            {param: val for param, val in params.items() if param.endswith("-indexed")}
+            {param: val for param, val in params.items() if param in index_affected}
         )
         return adj
 
