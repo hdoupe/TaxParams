@@ -126,10 +126,10 @@ def test_adj_CPI_offset(year):
     taxparams_cpi = TaxParams()
     taxparams_cpi.adjust({"CPI_offset": [{"year": year, "value": -0.001}]})
 
-    def_rates = taxparams._inflation_rates
+    def_rates = taxparams.inflation_rates
     default_inflation = np.array([def_rates[yr] for yr in sorted(def_rates)])
 
-    new_rates = taxparams_cpi._inflation_rates
+    new_rates = taxparams_cpi.inflation_rates
     new_inflation = np.array([new_rates[yr] for yr in sorted(new_rates)])
 
     exp_inflation = new_inflation - taxparams_cpi.CPI_offset

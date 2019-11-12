@@ -25,9 +25,9 @@ class TaxParams(paramtools.Parameters):
     WAGE_INDEXED_PARAMS = ("SS_Earnings_c", "SS_Earnings_thd")
 
     def __init__(self, *args, **kwargs):
-        self._wage_growth_rates = None
-        self._inflation_rates = None
-        self._rates = None
+        self.wage_growth_rates = None
+        self.inflation_rates = None
+        self._gfactors = None
         super().__init__(*args, **kwargs)
         self._init_values = {
             param: data["value"]
@@ -98,10 +98,11 @@ class TaxParams(paramtools.Parameters):
             cpi_min_year = min(cpi_adj["CPI_offset"], key=lambda vo: vo["year"])
             # apply new CPI_offset values to inflation rates
             rate_adjustment_vals = filter(
-                lambda vo: vo["year"] >= cpi_min_year["value"], self.CPI_offset
+                lambda vo: vo["year"] >= cpi_min_year["value"],
+                self._data["CPI_offset"]["value"],
             )
             for cpi_vo in rate_adjustment_vals:
-                self._inflation_rates[cpi_vo["year"]] += cpi_vo["value"]
+                self.inflation_rates[cpi_vo["year"]] += cpi_vo["value"]
 
             # 1. delete all unknown values.
             # 1.a for revision these are years specified after cpi_min_year
@@ -254,12 +255,12 @@ class TaxParams(paramtools.Parameters):
 
         Returns: rate to use for indexing.
         """
-        if not self._inflation_rates or not self._wage_growth_rates:
+        if not self.inflation_rates or not self.wage_growth_rates:
             self.set_rates()
         if param in self.WAGE_INDEXED_PARAMS:
-            return self._wage_growth_rates[label_to_extend_val]
+            return self.wage_growth_rates[label_to_extend_val]
         else:
-            return self._inflation_rates[label_to_extend_val]
+            return self.inflation_rates[label_to_extend_val]
 
     def set_rates(self):
         """Initialize taxcalc indexing data."""
@@ -269,15 +270,15 @@ class TaxParams(paramtools.Parameters):
         cpi_vals = cpi_vals + cpi_vals[-1:] * (2029 - 2013 + 1 - len(cpi_vals))
         cpi_offset = {(2013 + ix): val for ix, val in enumerate(cpi_vals)}
 
-        if not self._rates:
-            self._rates = taxcalc.GrowFactors()
+        if not self._gfactors:
+            self._gfactors = taxcalc.GrowFactors()
 
-        self._inflation_rates = {
+        self.inflation_rates = {
             2013 + ix: np.round(rate + cpi_offset[2013 + ix], 4)
-            for ix, rate in enumerate(self._rates.price_inflation_rates(2013, 2029))
+            for ix, rate in enumerate(self._gfactors.price_inflation_rates(2013, 2029))
         }
 
-        self._wage_growth_rates = {
+        self.wage_growth_rates = {
             2013 + ix: rate
-            for ix, rate in enumerate(self._rates.wage_growth_rates(2013, 2029))
+            for ix, rate in enumerate(self._gfactors.wage_growth_rates(2013, 2029))
         }
