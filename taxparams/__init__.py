@@ -1,33 +1,45 @@
-import paramtools
+import paramtools as pt
+from paramtools.select import select_lt
 import taxcalc
 import numpy as np
+import marshmallow as ma
 import copy
 
 
 from taxparams import utils
 
 
-def lt_func(x, y) -> bool:
-    return all(x < item for item in y)
+class CompatibleDataSchema(ma.Schema):
+    """
+    Schema for Compatible data object
+    {
+        "compatible_data": {"data1": bool, "data2": bool, ...}
+    }
+    """
+
+    puf = ma.fields.Boolean()
+    cps = ma.fields.Boolean()
 
 
-def select_lt(value_objects, exact_match, labels, tree=None):
-    return paramtools.select(value_objects, exact_match, lt_func, labels, tree)
+pt.register_custom_type(
+    "compatible_data",
+    ma.fields.Nested(CompatibleDataSchema())
+)
 
 
-class TaxParams(paramtools.Parameters):
+class TaxParams(pt.Parameters):
     defaults = utils.convert_defaults()
     array_first = True
     label_to_extend = "year"
     uses_extend_func = True
 
-    last_known_year = 2018
     WAGE_INDEXED_PARAMS = ("SS_Earnings_c", "SS_Earnings_thd")
 
     def __init__(self, *args, **kwargs):
-        self.wage_growth_rates = None
-        self.inflation_rates = None
+        self._wage_growth_rates = None
+        self._inflation_rates = None
         self._gfactors = None
+        self._wage_indexed = TaxParams.WAGE_INDEXED_PARAMS
         super().__init__(*args, **kwargs)
         self._init_values = {
             param: data["value"]
@@ -67,18 +79,20 @@ class TaxParams(paramtools.Parameters):
             parameters.
 
         Notable side-effects:
-            - All values of indexed parameters, including default values, are wiped out after
-                the first year in which the "CPI_offset" is changed. This is only necessary because
-                Tax-Calculator hard-codes inflated values. If Tax-Calculator only hard-coded values
-                that were changed for non-inflation related reasons, then this would not be
-                necessary for default values.
-            - All values of a parameter whose indexed status is adjusted are wiped out after the
-                year in which the value is adjusted for the same hard-coding reason.
+            - All values of indexed parameters, including default values, are
+                wiped out after the first year in which the "CPI_offset" is
+                changed. This is only necessary because Tax-Calculator
+                hard-codes inflated values. If Tax-Calculator only hard-coded
+                values that were changed for non-inflation related reasons,
+                then this would not be necessary for default values.
+            - All values of a parameter whose indexed status is adjusted are
+              wiped out after the year in which the value is adjusted for the
+              same hard-coding reason.
         """
         min_year = min(self._stateless_label_grid["year"])
 
-        # turn off extra ops during the intermediary adjustments so that
-        # expensive and unnecessary operations are not changed.
+        # Temporarily turn off extra ops during the intermediary adjustments
+        # so that expensive and unnecessary operations are not run.
         label_to_extend = self.label_to_extend
         array_first = self.array_first
         self.array_first = False
@@ -87,66 +101,64 @@ class TaxParams(paramtools.Parameters):
 
         # Check if CPI_offset is adjusted. If so, reset values of all indexed
         # parameters after year where CPI_offset is changed. If CPI_offset is
-        # changed multiple times, then the reset year is the year in which the
-        # CPI_offset is first changed.
+        # changed multiple times, then reset values after the first year in
+        # which the CPI_offset is changed.
         needs_reset = []
         if params.get("CPI_offset") is not None:
-            # get first year CPI_offset is adjusted
-            cpi_adj = super().adjust({"CPI_offset": params["CPI_offset"]}, **kwargs)
+            # Update CPI_offset with new value.
+            cpi_adj = super().adjust(
+                {
+                    "CPI_offset": params["CPI_offset"]
+                },
+                **kwargs
+            )
             # turn off extend now that CPI_offset has been updated.
             self.label_to_extend = None
-            cpi_min_year = min(cpi_adj["CPI_offset"], key=lambda vo: vo["year"])
-            # apply new CPI_offset values to inflation rates
-            rate_adjustment_vals = filter(
-                lambda vo: vo["year"] >= cpi_min_year["value"],
-                self._data["CPI_offset"]["value"],
+            # Get first year in which CPI_offset is changed.
+            cpi_min_year = min(
+                cpi_adj["CPI_offset"], key=lambda vo: vo["year"]
+            )
+            # Apply new CPI_offset values to inflation rates
+            rate_adjustment_vals = self.select_gt(
+                "CPI_offset", True, year=cpi_min_year["year"] - 1
             )
             for cpi_vo in rate_adjustment_vals:
-                self.inflation_rates[cpi_vo["year"]] += cpi_vo["value"]
-
+                self._inflation_rates[cpi_vo["year"] - self.start_year] += \
+                    cpi_vo["value"]
             # 1. delete all unknown values.
             # 1.a for revision these are years specified after cpi_min_year
             to_delete = {}
-            to_adjust = {}
             for param in params:
-                if param == "CPI_offset" or param in self.WAGE_INDEXED_PARAMS:
+                if param == "CPI_offset" or param in self._wage_indexed:
                     continue
                 if param.endswith("-indexed"):
                     param = param.split("-indexed")[0]
-                # TODO: disting. btw wage and price?
                 if self._data[param].get("indexed", False):
                     gt = self.select_gt(param, True, year=cpi_min_year["year"])
-                    to_delete[param] = list([dict(vo, **{"value": None}) for vo in gt])
-                    to_adjust[param] = select_lt(
-                        self._init_values[param],
-                        True,
-                        {"year": cpi_min_year["year"] + 1},
-                    )
+                    to_delete[param] = [
+                        dict(vo, **{"value": None}) for vo in gt
+                    ]
                     needs_reset.append(param)
             super().adjust(to_delete, **kwargs)
-            super().adjust(to_adjust, **kwargs)
 
             # 1.b for all others these are years after last_known_year
             to_delete = {}
-            to_adjust = {}
-            last_known_year = max(cpi_min_year["year"], self.last_known_year)
+            last_known_year = max(cpi_min_year["year"], self._last_known_year)
             for param in self._data:
                 if (
-                    param in params
-                    or param == "CPI_offset"
-                    or param in self.WAGE_INDEXED_PARAMS
+                    param in params or
+                    param == "CPI_offset" or
+                    param in self.WAGE_INDEXED_PARAMS
                 ):
                     continue
-                if self._data[param].get("indexed", False):  # TODO: see above
+                if self._data[param].get("indexed", False):
                     gt = self.select_gt(param, True, year=last_known_year)
-                    to_delete[param] = list([dict(vo, **{"value": None}) for vo in gt])
-                    to_adjust[param] = select_lt(
-                        self._init_values[param], True, {"year": last_known_year + 1}
+                    to_delete[param] = list(
+                        [dict(vo, **{"value": None}) for vo in gt]
                     )
                     needs_reset.append(param)
 
             super().adjust(to_delete, **kwargs)
-            super().adjust(to_adjust, **kwargs)
 
             self.extend(label_to_extend="year")
 
@@ -156,6 +168,12 @@ class TaxParams(paramtools.Parameters):
         for param, values in params.items():
             if param.endswith("-indexed"):
                 base_param = param.split("-indexed")[0]
+                if not self._data[base_param].get("indexable", None):
+                    msg = f"Parameter {base_param} is not indexable."
+                    raise pt.ValidationError(
+                        {"errors": {base_param: msg}},
+                        labels=None
+                    )
                 index_affected = index_affected | {param, base_param}
                 to_index = {}
                 if isinstance(values, bool):
@@ -172,15 +190,27 @@ class TaxParams(paramtools.Parameters):
                 if base_param in params:
                     min_index_change_year = min(to_index.keys())
                     vos = select_lt(
-                        params[base_param], False, {"year": min_index_change_year}
+                        params[base_param],
+                        False,
+                        {"year": min_index_change_year}
                     )
                     if vos:
-                        min_adj_year = min(vos, key=lambda vo: vo["year"])["year"]
-                        gt = self.select_gt(base_param, True, year=min_adj_year)
+                        min_adj_year = min(
+                            vos,
+                            key=lambda vo: vo["year"]
+                        )["year"]
+                        gt = self.select_gt(
+                            base_param,
+                            True,
+                            year=min_adj_year
+                        )
                         super().adjust(
                             {
                                 base_param: list(
-                                    [dict(vo, **{"value": None}) for vo in gt]
+                                    [
+                                        dict(vo, **{"value": None})
+                                        for vo in gt
+                                    ]
                                 )
                             }
                         )
@@ -195,28 +225,38 @@ class TaxParams(paramtools.Parameters):
 
                 for year in sorted(to_index):
                     indexed_val = to_index[year]
-                    # get and delete all default values after year where indexed status changed.
+                    # get and delete all default values after year where
+                    # indexed status changed.
                     gte = self.select_gt(base_param, True, year=year)
                     super().adjust(
-                        {base_param: list([dict(vo, **{"value": None}) for vo in gte])}
+                        {
+                            base_param: list(
+                                [
+                                    dict(vo, **{"value": None})
+                                    for vo in gte
+                                ]
+                            )
+                        }
                     )
 
-                    # 2.b extend values for this parameter to the year where the indexed
-                    # status changes.
+                    # 2.b extend values for this parameter to the year where
+                    # the indexed status changes.
                     if year > min_year:
                         self.extend(
                             params=[base_param],
                             label_to_extend="year",
-                            label_to_extend_values=list(range(min_year, year + 1)),
+                            label_to_extend_values=list(
+                                range(min_year, year + 1)
+                            ),
                         )
 
                     # 2.c set indexed status.
                     self._data[base_param]["indexed"] = indexed_val
 
-                    # 2.d adjust with values greater than or equal to current year
-                    # in params
+                    # 2.d adjust with values greater than or equal to current
+                    # year in params
                     if base_param in params:
-                        vos = paramtools.select_gt(
+                        vos = pt.select_gt(
                             params[base_param], False, {"year": year - 1}
                         )
                         super().adjust({base_param: vos}, **kwargs)
@@ -225,13 +265,14 @@ class TaxParams(paramtools.Parameters):
                     self.extend(params=[base_param], label_to_extend="year")
 
                 needs_reset.append(base_param)
-        # re-instate ops.
+        # re-instate actions.
         self.label_to_extend = label_to_extend
         self.array_first = array_first
 
         # filter out "-indexed" params
         nonindexed_params = {
-            param: val for param, val in params.items() if param not in index_affected
+            param: val for param, val in params.items()
+            if param not in index_affected
         }
 
         needs_reset = set(needs_reset) - set(nonindexed_params.keys())
@@ -243,7 +284,10 @@ class TaxParams(paramtools.Parameters):
 
         # 4. Add indexing params back for return to user.
         adj.update(
-            {param: val for param, val in params.items() if param in index_affected}
+            {
+                param: val for param, val in params.items()
+                if param in index_affected
+            }
         )
         return adj
 
@@ -252,33 +296,61 @@ class TaxParams(paramtools.Parameters):
         Initalize indexing data and return the indexing rate value
         depending on the parameter name and label_to_extend_val, the value of
         label_to_extend.
-
         Returns: rate to use for indexing.
         """
-        if not self.inflation_rates or not self.wage_growth_rates:
+        if not self._inflation_rates or not self._wage_growth_rates:
             self.set_rates()
         if param in self.WAGE_INDEXED_PARAMS:
-            return self.wage_growth_rates[label_to_extend_val]
+            return self.wage_growth_rates(year=label_to_extend_val)
         else:
-            return self.inflation_rates[label_to_extend_val]
+            return self.inflation_rates(year=label_to_extend_val)
+
+    def wage_growth_rates(self, year=None):
+        if year is not None:
+            return self._wage_growth_rates[year - self.start_year]
+        return self._wage_growth_rates or []
+
+    def inflation_rates(self, year=None):
+        if year is not None:
+            return self._inflation_rates[year - self.start_year]
+        return self._inflation_rates or []
 
     def set_rates(self):
         """Initialize taxcalc indexing data."""
         cpi_vals = [vo["value"] for vo in self._data["CPI_offset"]["value"]]
         # extend cpi_offset values through budget window if they
         # have not been extended already.
-        cpi_vals = cpi_vals + cpi_vals[-1:] * (2029 - 2013 + 1 - len(cpi_vals))
+        cpi_vals = cpi_vals + cpi_vals[-1:] * (2030 - 2013 + 1 - len(cpi_vals))
         cpi_offset = {(2013 + ix): val for ix, val in enumerate(cpi_vals)}
 
         if not self._gfactors:
             self._gfactors = taxcalc.GrowFactors()
 
-        self.inflation_rates = {
-            2013 + ix: np.round(rate + cpi_offset[2013 + ix], 4)
-            for ix, rate in enumerate(self._gfactors.price_inflation_rates(2013, 2029))
-        }
+        self._inflation_rates = [
+            np.round(rate + cpi_offset[2013 + ix], 4)
+            for ix, rate in enumerate(
+                self._gfactors.price_inflation_rates(2013, 2030)
+            )
+        ]
 
-        self.wage_growth_rates = {
-            2013 + ix: rate
-            for ix, rate in enumerate(self._gfactors.wage_growth_rates(2013, 2029))
-        }
+        self._wage_growth_rates = self._gfactors.wage_growth_rates(2013, 2030)
+
+    @property
+    def current_year(self):
+        return self.label_grid["year"][0]
+
+    @property
+    def start_year(self):
+        return self._stateless_label_grid["year"][0]
+
+    @property
+    def end_year(self):
+        return self._stateless_label_grid["year"][-1]
+
+    @property
+    def num_years(self):
+        return self.end_year - self.start_year + 1
+
+    @property
+    def _last_known_year(self):
+        return taxcalc.Policy.LAST_KNOWN_YEAR

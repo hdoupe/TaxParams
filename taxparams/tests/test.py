@@ -1,3 +1,5 @@
+import copy
+
 import numpy as np
 import pytest
 
@@ -122,18 +124,8 @@ def test_adj_CPI_offset(year):
     def convert(arr):
         return {2013 + i: arr[i] for i in range(len(arr))}
 
-    taxparams = TaxParams()
     taxparams_cpi = TaxParams()
     taxparams_cpi.adjust({"CPI_offset": [{"year": year, "value": -0.001}]})
-
-    def_rates = taxparams.inflation_rates
-    default_inflation = np.array([def_rates[yr] for yr in sorted(def_rates)])
-
-    new_rates = taxparams_cpi.inflation_rates
-    new_inflation = np.array([new_rates[yr] for yr in sorted(new_rates)])
-
-    exp_inflation = new_inflation - taxparams_cpi.CPI_offset
-    np.testing.assert_allclose(default_inflation, exp_inflation)
 
     pol = taxcalc.Policy()
     pol.set_year(year)
